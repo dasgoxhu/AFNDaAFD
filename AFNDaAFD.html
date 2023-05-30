@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Generador de Diagramas</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #000000;
+      color: #fff;
+    }
+
+    h1 {
+      text-align: center;
+    }
+
+    a {
+      text-align: center;
+      margin-left: 37%;
+    }
+
+    #grafo-container {
+      height: 600px;
+      margin-bottom: 20px;
+    }
+
+    #output {
+      font-family: monospace;
+      white-space: pre;
+      background-color: #000000;
+      margin-left: 44%;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+      margin-top: 5%;
+    }
+
+    th, td {
+      padding: 8px;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+    }
+
+    th {
+      background-color: #000000;
+    }
+
+    .success {
+      color: green;
+      font-weight: bold;
+    }
+
+    .error {
+      color: red;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>AFND a AFD</h1>
+  <h1>El Diagrama</h1>
+  <div id="grafo-container"></div>
+
+  <pre id="output"></pre>
+
+  <table id="tabla-transiciones">
+    <thead>
+      <tr>
+        <th>Estado</th>
+        <th>0</th>
+        <th>1</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  <script>
+    // Definición del AFND
+    const AFND = {
+      estados: ['A', 'B', 'C'],
+      alfabeto: ['0', '1'],
+      transiciones: {
+        'A': {
+          '0': [''],
+          '1': ['B', 'C']
+        },
+        'B': {
+          '0': ['C', 'D'],
+          '1': ['A']
+        },
+        'C': {
+          '0': ['B', 'D'],
+          '1': ['A', 'B']
+        },
+        'D': {
+          '0': [''],
+          '1': ['']
+        }
+      },
+      estadoInicial: 'A',
+      estadosFinales: ['C']
+    };
+
+    // Función para validar si un autómata es determinístico o no
+    function esDeterministico(AFND) {
+      for (let estado in AFND.transiciones) {
+        for (let simbolo in AFND.transiciones[estado]) {
+          if (AFND.transiciones[estado][simbolo].length > 1) {
+            return false;
+          }
+        }
+      }
+      return true;
+    }
+
+    // Función para convertir un AFND a un AFD
+    function convertirAFNDaAFD(AFND) {
+      if (esDeterministico(AFND)) {
+        agregarTextoSalida('El autómata ya es determinístico.', 'success');
+        return AFND;
+      }
+
+      const AFD = {
+        estados: [],
+        alfabeto: AFND.alfabeto,
+        transiciones: {},
+        estadoInicial: '',
+        estadosFinales: []
+      };
+
+      const tablaEstados = [];
+
+      function obtenerNuevoEstado(estado) {
+        return tablaEstados.indexOf(estado);
+      }
+
+      function agregarEstado(estado) {
+        const nuevoEstado = obtenerNuevoEstado(estado);
+        if (nuevoEstado === -1) {
+          tablaEstados.push(estado);
+          AFD.estados.push(estado);
+          AFD.transiciones[estado] = {};
+          for (let simbolo of AFD.alfabeto) {
+            AFD.transiciones[estado][simbolo] = [];
+          }
+          if (estado.includes(AFND.estadoInicial)) {
+            AFD.estadoInicial = estado;
+          }
+          for (let estadoFinal of AFND.estadosFinales) {
+            if (estado.includes(estadoFinal)) {
+              AFD.estadosFinales.push(estado);
+              break;
+            }
+          }
+          return true;
+        }
+        return false;
+      }
+
+      function obtenerEstadosDestino(estado, simbolo) {
+        const estadosDestino = [];
+        for (let e of estado.split('')) {
+          const destinos = AFND.transiciones[e][simbolo];
+          for (let d of destinos) {
+            if (!estadosDestino.includes(d)) {
+              estadosDestino.push(d);
+            }
+          }
+        }
+        return estadosDestino;
+      }
+
+      const estadoInicial = AFND.estadoInicial;
+      const nuevoEstadoInicial = estadoInicial === '' ? 'INICIO' : estadoInicial;
+      agregarEstado(nuevoEstadoInicial);
+      const pilaEstados = [nuevoEstadoInicial];
+
+      while (pilaEstados.length > 0) {
+        const estado = pilaEstados.pop();
+        for (let simbolo of AFD.alfabeto) {
+          const estadosDestino = obtenerEstadosDestino(estado, simbolo);
+          const nuevoEstado = estadosDestino.sort().join('');
+          if (agregarEstado(nuevoEstado)) {
+            pilaEstados.push(nuevoEstado);
+          }
+          AFD.transiciones[estado][simbolo] = [nuevoEstado];
+        }
+      }
+
+      return AFD;
+    }
+
+    // Función para imprimir la tabla de transiciones de un autómata en la consola
+    function imprimirTablaTransiciones(automata) {
+      const estados = automata.estados;
+      const alfabeto = automata.alfabeto;
+
+      agregarTextoSalida('Tabla de transiciones:');
+
+      let tabla = '';
+      tabla += 'Estado\t\t' + alfabeto.join('\t') + '\n';
+      for (let estado of estados) {
+        let fila = estado + '\t\t';
+        for (let simbolo of alfabeto) {
+          fila += automata.transiciones[estado][simbolo].join(',') + '\t';
+        }
+        tabla += fila + '\n';
+      }
+
+      agregarTextoSalida(tabla);
+    }
+
+    // Función para imprimir la tabla de transiciones de un autómata en el HTML
+    function imprimirTablaTransicionesHTML(automata) {
+      const estados = automata.estados;
+      const alfabeto = automata.alfabeto;
+      const tablaTransiciones = document.getElementById('tabla-transiciones');
+      const tbody = tablaTransiciones.querySelector('tbody');
+
+      // Limpiar la tabla existente
+      tbody.innerHTML = '';
+
+      // Crear filas para cada estado
+      for (let estado of estados) {
+        const fila = document.createElement('tr');
+        const celdaEstado = document.createElement('td');
+        celdaEstado.textContent = estado;
+        fila.appendChild(celdaEstado);
+
+        for (let simbolo of alfabeto) {
+          const celdaSimbolo = document.createElement('td');
+          celdaSimbolo.textContent = automata.transiciones[estado][simbolo].join(',');
+          fila.appendChild(celdaSimbolo);
+        }
+
+        tbody.appendChild(fila);
+      }
+    }
+
+    // Función para generar un diagrama de un autómata
+    function generarDiagrama(automata) {
+      // Crear un nuevo grafo
+      const container = document.getElementById('grafo-container');
+      const data = {
+        nodes: new vis.DataSet(),
+        edges: new vis.DataSet()
+      };
+      const options = {};
+
+      const grafo = new vis.Network(container, data, options);
+
+      // Crear nodos para cada estado
+      const nodos = automata.estados.map(estado => ({
+        id: estado,
+        label: estado,
+        shape: 'circle',
+        color: automata.estadosFinales.includes(estado) ? '#98FB98' : '#FFFFFF'
+      }));
+
+      // Crear aristas para las transiciones
+      const aristas = [];
+      for (let origen in automata.transiciones) {
+        for (let simbolo in automata.transiciones[origen]) {
+          const destinos = automata.transiciones[origen][simbolo];
+          for (let destino of destinos) {
+            aristas.push({ from: origen, to: destino, label: simbolo });
+          }
+        }
+      }
+
+      // Agregar los nodos y las aristas al grafo
+      data.nodes.add(nodos);
+      data.edges.add(aristas);
+    }
+
+    // Función para agregar texto a la salida en el HTML
+    function agregarTextoSalida(texto, clase = '') {
+      const output = document.getElementById('output');
+      const nuevoTexto = clase ? `<span class="${clase}">${texto}</span>` : texto;
+      output.innerHTML += nuevoTexto + '\n';
+    }
+
+    // Validar si el autómata es determinístico o no
+    if (!esDeterministico(AFND)) {
+      agregarTextoSalida('El autómata no es determinístico.', 'error');
+      const AFD = convertirAFNDaAFD(AFND);
+      imprimirTablaTransiciones(AFD);
+      imprimirTablaTransicionesHTML(AFD);
+      generarDiagrama(AFND); // Generar diagrama del AFND
+      generarDiagrama(AFD); // Generar diagrama del AFD
+    } else {
+      agregarTextoSalida('El autómata ya es determinístico.', 'success');
+      imprimirTablaTransiciones(AFND);
+      imprimirTablaTransicionesHTML(AFND);
+      generarDiagrama(AFND); // Generar diagrama del AFND (ya es determinístico)
+    }
+  </script>
+  <a>® Hecho por Daniel Stiven Gomez Hurtado y Geronimo Urrea Pamplona</a>
+</body>
+</html>
